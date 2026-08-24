@@ -11,8 +11,16 @@ async def get_dashboard_summary(
     current_user: dict = Depends(get_current_user)
 ) -> Dict[str, Any]:
     
-    tenant_id = getattr(current_user, "tenant_id", "default_tenant") or "default_tenant"
-    
+    # No silent "default_tenant" fallback: that bucket is shared by every user
+    # whose tenant failed to resolve, which breaks isolation and poisons the
+    # revenue cache key. A missing tenant is an auth failure, not a default.
+    tenant_id = getattr(current_user, "tenant_id", None)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail="No tenant context for this user",
+        )
+
     revenue_data = await get_revenue_summary(property_id, tenant_id)
     
     total_revenue_float = float(revenue_data['total'])
